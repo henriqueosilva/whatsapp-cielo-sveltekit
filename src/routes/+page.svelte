@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { invalidate, invalidateAll } from '$app/navigation';
 	import { createCounter } from '$lib/counterStore';
 	import { simpleUser } from '$lib/userStore';
+	import { json } from '@sveltejs/kit';
 	import type { Cnpj, User } from '../app';
-	import type { ActionData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
 	const counter = createCounter(10);
 	let mensagemErro = '';
@@ -10,12 +12,17 @@
 	let idade = $simpleUser.idade;
 	let ativo = $simpleUser.ativo;
 	let empresas: Cnpj[] | undefined = undefined;
+	let dataInicio = 0;
+	let dataFim = 0;
 	export let form: ActionData;
+	export let data: PageData;
 	$: {
 		/* console.log($simpleUser);
+		console.log(empresas);*/
+		console.log(form);
 		console.log(empresas);
-		console.log(form); */
-		console.log(empresas);
+		console.log(data);
+		if (data.empresas) empresas = data.empresas;
 	}
 	const save = () => {
 		simpleUser.update((st) => ({
@@ -26,6 +33,15 @@
 	};
 
 	const buscaEmpresas = async () => {
+		if (dataInicio != 0 && dataFim != 0) {
+			const response = await (
+				await fetch(`/api/empresas?dataInicio=${dataInicio}&dataFim=${dataFim}`)
+			).json();
+			if (response.status == 'erro') {
+				mensagemErro = response.msg;
+				return;
+			}
+		}
 		const response = await (await fetch('/api/empresas')).json();
 		if (response.status == 'erro') {
 			mensagemErro = response.msg;
@@ -34,10 +50,21 @@
 		empresas = response;
 	};
 
-	const mandarMensagem = (telefones: string | undefined): void => {
-		if (!telefones) return;
-		const phone = '55' + telefones.split('&')[0].split('-').join('');
-		const message = 'Teste';
+	const mandarMensagem = (empresa: Cnpj): void => {
+		if (!empresa.telefones) return;
+		fetch('/api/empresas/contato', {
+			method: 'POST',
+			body: JSON.stringify({ cnpj: empresa.cnpj })
+		});
+		empresas
+			?.filter((empresa) => empresa.cnpj == empresa.cnpj)
+			?.forEach((empresa) => (empresa.contactado = empresa.contactado += 1));
+		invalidateAll();
+		const phone = '55' + empresa.telefones.split('&')[0].split('-').join('');
+		const message = `❎❎❎ATENÇÃO✅✅✅
+    📌 Somos captadores de clientes de empresas para máquinas de cartão💳 e recentemente você abriu um CNPJ NOVO💡
+    Gostaríamos de lhe informar que TEMOS ÓTIMAS TAXAS E UM ATENDIMENTO EXCLUSIVO PARA VOCÊ.
+    Tem interesse de falar com um de nossos Gerentes Comercial para receber uma proposta sem compromisso?`;
 		const target = `https://api.whatsapp.com/send?phone=${encodeURIComponent(
 			phone
 		)}&text=${encodeURIComponent(message)}`;
@@ -46,8 +73,19 @@
 </script>
 
 <h2>{mensagemErro}</h2>
-
-<button on:click={buscaEmpresas}>Buscar Empresas</button>
+<label
+	>Data Inicio
+	<input type="date" name="dataInicio" bind:value={dataInicio} />
+</label>
+<label
+	>Data Fim
+	<input type="date" name="dataFim" bind:value={dataFim} />
+</label>
+<button
+	on:click={() => {
+		invalidateAll();
+	}}><a href="/?dataInicio={dataInicio}&dataFim={dataFim}">Buscar Empresas</a></button
+>
 <div>
 	{#if empresas?.length}
 		<table>
@@ -62,6 +100,7 @@
 					<td>Municipio</td>
 					<td>Telefone</td>
 					<td>UF</td>
+					<td>Contactado</td>
 					<td>Ação</td>
 				</tr>
 			</thead>
@@ -70,14 +109,15 @@
 					<tr id={empresa.cnpj}>
 						<td>{empresa.cnpj}</td>
 						<td>{empresa.nome_fantasia}</td>
-						<td>{empresa.data_abertura}</td>
+						<td>{empresa.data_abertura.split('T')[0]}</td>
 						<td>{empresa.situacao_cadastral}</td>
 						<td>{empresa.logradouro}</td>
 						<td>{empresa.bairro}</td>
 						<td>{empresa.municipio}</td>
-						<td>{empresa.telefones}</td>
+						<td>{`${empresa.telefones ? empresa.telefones : 'carregando...'}`}</td>
 						<td>{empresa.uf}</td>
-						<button on:click={() => mandarMensagem(empresa.telefones)}>Enviar Mensagem</button>
+						<td>{empresa.contactado}</td>
+						<button on:click={() => mandarMensagem(empresa)}>Enviar Mensagem</button>
 					</tr>
 				{/each}
 			</tbody>

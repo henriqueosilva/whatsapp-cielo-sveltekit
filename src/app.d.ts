@@ -31,6 +31,7 @@ export interface Cnpj {
 	cnpj_mei: boolean;
 	versao: string;
 	telefones?: string;
+	contactado?: number;
 }
 
 export interface CnpjFull {

@@ -6,12 +6,21 @@ import { db } from '$lib/connectDB';
 
 type CNPJ_Telefone = Cnpj & { telefones: string[] };
 
-export const GET: RequestHandler = async () => {
-	queryParams.range_query.data_abertura.lte = new Date().toISOString().split('T')[0];
-	queryParams.range_query.data_abertura.gte = new Date().toISOString().split('T')[0];
+export const GET: RequestHandler = async ({ url }) => {
+	const dataInicio = url.searchParams.get('dataInicio');
+	const dataFim = url.searchParams.get('dataFim');
+
+	queryParams.range_query.data_abertura.lte =
+		dataInicio ||
+		new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+			.toISOString()
+			.split('T')[0];
+	queryParams.range_query.data_abertura.gte =
+		dataFim ||
+		new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+			.toISOString()
+			.split('T')[0];
 	queryParams.page = 1;
-	const empresas = [];
-	let qtd = 20;
 
 	const rows = db
 		.prepare('SELECT * FROM Empresa WHERE data_abertura = ?')
@@ -26,46 +35,19 @@ export const GET: RequestHandler = async () => {
 		});
 		return json(rows);
 	}
-	while (qtd == 20) {
-		console.log('Returning from Fetch');
-		const res = (await (
-			await fetch(queryUrl + 'search', {
-				method: 'POST',
-				body: JSON.stringify(queryParams),
-				headers: {
-					'Content-Type': 'application/json'
-				}
-			})
-		).json()) as Root;
-		/* console.log('Total: ', res.data.count);
-		console.log('Empresas: ', res.data.cnpj.length);
-		console.log('Pagina: ', queryParams.page); */
-		if (res.data.count == 0) {
-			return json(
-				{
-					status: 'erro',
-					msg: `Nenhuma empresa cadastrada no dia  ${new Date(
-						queryParams.range_query.data_abertura.lte + 'T03:00:00Z'
-					).toLocaleDateString()}`
-				},
-				{ status: 404 }
-			);
-		}
-		empresas.push(...res.data.cnpj);
-		empresas.map(async (empresa) => {
-			const telefones = await fetchTelefone(empresa.cnpj);
-			empresa.telefones = telefones.join('&');
-		});
-		queryParams.page += 1;
-		qtd = res.data.cnpj.length;
+	const empresas = await fetchEmpresasFromApi();
+	if (!empresas) {
+		return json(
+			{
+				status: 'erro',
+				msg: `Nenhuma empresa cadastrada no dia  ${new Date(
+					queryParams.range_query.data_abertura.lte + 'T00:00:00Z'
+				).toLocaleDateString()}`
+			},
+			{ status: 404 }
+		);
 	}
-	/* if (res.status != 200) {
-		return json({ status: 'falha', msg: 'Api não retornou da maneira esperada' }, { status: 500 });
-	} */
-	//console.log(empresas);
 
-	//console.log(empresas.length);
-	//console.log(empresas);
 	insertIntoDB(empresas);
 	return json(empresas, { status: 200 });
 };
@@ -103,10 +85,6 @@ async function insertIntoDB(empresas: Cnpj[]) {
 	console.log('Finalizou Inserir no Banco de Dados');
 }
 
-/* export const POST: RequestHandler = ({ request }) => {
-	return new Response();
-}; */
-
 async function fetchTelefone(cnpj: string): Promise<string[]> {
 	const empresa = (await (await fetch(queryUrl + cnpj)).json()) as RootFull;
 	return empresa.cnpj.telefones;
@@ -118,4 +96,28 @@ function storeTelefone(cnpj: string, telefones: string[]) {
 	} catch (err) {
 		console.log(err);
 	}
+}
+
+async function fetchEmpresasFromApi(): Promise<void | Cnpj[]> {
+	const empresas = [];
+	let qtd = 20;
+	while (qtd == 20) {
+		console.log('Returning from Fetch');
+		const res = (await (
+			await fetch(queryUrl + 'search', {
+				method: 'POST',
+				body: JSON.stringify(queryParams),
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			})
+		).json()) as Root;
+		if (res.data.count == 0) {
+			return;
+		}
+		empresas.push(...res.data.cnpj);
+		queryParams.page += 1;
+		qtd = res.data.cnpj.length;
+	}
+	return empresas;
 }
