@@ -61,10 +61,7 @@
 			?.forEach((empresa) => (empresa.contactado = empresa.contactado += 1));
 		invalidateAll();
 		const phone = '55' + empresa.telefones.split('&')[0].split('-').join('');
-		const message = `❎❎❎ATENÇÃO✅✅✅
-    📌 Somos captadores de clientes de empresas para máquinas de cartão💳 e recentemente você abriu um CNPJ NOVO💡
-    Gostaríamos de lhe informar que TEMOS ÓTIMAS TAXAS E UM ATENDIMENTO EXCLUSIVO PARA VOCÊ.
-    Tem interesse de falar com um de nossos Gerentes Comercial para receber uma proposta sem compromisso?`;
+		const message = `Olá, boa tarde, tudo bem!?`;
 		const target = `https://api.whatsapp.com/send?phone=${encodeURIComponent(
 			phone
 		)}&text=${encodeURIComponent(message)}`;
